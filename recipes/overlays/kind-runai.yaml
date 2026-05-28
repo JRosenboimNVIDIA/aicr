@@ -1,0 +1,135 @@
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Run:ai Control Plane on Kind.
+#
+# Stage 1 of the two-bundle install — CP-only, no cluster agent and no
+# GPU simulation. The CP is a centralized backend (UI, API, Postgres,
+# Keycloak, etc.) that does not care whether GPUs exist on the cluster
+# it runs on, so fake-gpu-operator + the real gpu-operator stack are
+# both excluded here. They live in `kind-runai-cluster` (stage 2),
+# alongside runai-cluster.
+#
+# Disables base components that target real GPU hardware or conflict
+# with the Run:ai stack (kai-scheduler conflicts with Run:ai's own
+# scheduler; nvsentinel/nodewright/dra-driver/network-operator all
+# need real GPU nodes that do not exist in fake mode).
+#
+# Selection: `aicr recipe --service kind --platform runai`.
+#
+# NGINX Ingress is assumed to be pre-installed on the cluster — the
+# CP chart's ingress objects expect a controller already reconciling.
+
+kind: RecipeMetadata
+apiVersion: aicr.nvidia.com/v1alpha1
+metadata:
+  name: kind-runai
+
+spec:
+  base: kind
+
+  criteria:
+    service: kind
+    platform: runai
+
+  componentRefs:
+    # Disable real gpu-operator — fake-gpu-operator owns the gpu-operator
+    # namespace exclusively in this overlay.
+    - name: gpu-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Disable components that require real GPU nodes / real OS access:
+    - name: nfd
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nvsentinel
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nodewright-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nvidia-dra-driver-gpu
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: network-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Conflicts with Run:ai's own scheduler bundled in the cluster chart;
+    # turn it off whenever the Run:ai platform is in play.
+    - name: kai-scheduler
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Run:ai CP consumes pre-created TLS secrets (out-of-band via
+    # tools/runai-secrets.py), so cert-manager is unused. Turn it off
+    # so it is not pulled from base.
+    - name: cert-manager
+      type: Helm
+      overrides:
+        enabled: false
+
+    # The CP chart embeds its own Postgres/Keycloak/Prometheus internally.
+    # An external Prometheus stack only matters once the cluster-side
+    # runai-cluster agent (not in this overlay) is present and scraping
+    # cluster-wide GPU metrics. Disable the whole stack here; the
+    # `kind-runai-full` overlay (intent: training) re-enables what's
+    # needed alongside runai-cluster.
+    - name: prometheus-operator-crds
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: kube-prometheus-stack
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: k8s-ephemeral-storage-metrics
+      type: Helm
+      overrides:
+        enabled: false
+
+    # prometheus-adapter is added by the monitoring-hpa overlay, which
+    # auto-matches via `criteria: intent: any`. Turn it off too.
+    - name: prometheus-adapter
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Run:ai Control Plane. Cluster-side runai-cluster chart is
+    # intentionally NOT included here — bring it in via a follow-up
+    # overlay once the CP is reachable and you have a clientSecret.
+    #
+    # No dependencyRefs: TLS secrets (runai-backend-tls etc.) and the
+    # image-pull secret (runai-reg-creds) are pre-created out-of-band
+    # by tools/runai-secrets.py, so cert-manager is unused. The chart
+    # embeds its own Postgres/Keycloak/Prometheus internally — an
+    # external kube-prometheus-stack only matters once the cluster-side
+    # runai-cluster agent is present.
+    - name: runai-backend
+      type: Helm
+      valuesFile: components/runai-backend/values.yaml
