@@ -12,44 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Run:ai cluster-side agent on Kind, second-stage of a two-bundle install.
+# Run:ai cluster agent on Kind ("lab" flavor).
 #
-# Why two overlays?
-#   `runai-cluster` cannot be installed in the same bundle as the CP —
-#   the cluster registers itself with the CP REST API at install time,
-#   receiving back a UUID + clientSecret that must be plugged into the
-#   chart values. That handoff is by definition out-of-band, so:
+# Cluster-only — fake GPUs (via fake-gpu-operator), the Prometheus
+# stack the cluster chart federates from, and the cluster agent itself.
+# The Control Plane is a separate platform (`runai-backend`) and lives
+# in `kind-runai-backend.yaml`. The two are independently deployable;
+# you can install one without the other.
 #
-#     stage 1 — `kind-runai`         → CP only
-#                                    → register cluster in CP UI/API,
-#                                      capture cluster.uid + clientSecret
-#     stage 2 — `kind-runai-cluster` → fake-gpu-operator +
-#                                      prometheus stack + runai-cluster
-#                                      (with the values from stage 1)
+# Selection: `aicr recipe --service kind --platform runai-cluster`.
 #
-# fake-gpu-operator is in stage 2 because it advertises simulated GPU
-# resources on worker nodes — that is a *cluster* concern, irrelevant
-# to the CP, and lines up with how a real Run:ai topology would have
-# the GPU operator only on GPU clusters.
-#
-# Both stages share the same Kind cluster; helm upgrade --install on
-# already-deployed releases is a no-op, so re-running stage 1 between
-# stages is safe.
-#
-# Selection: `aicr recipe --service kind --platform runai --intent training`
-# (the extra `intent` criterion makes this overlay strictly more specific
-# than `kind-runai`, so AICR picks this leaf.)
-#
-# Required deploy-time --set values:
+# Required deploy-time --set values (or use existingSecret):
 #   --set runaicluster:controlPlane.url=<fqdn>
 #   --set runaicluster:cluster.url=<fqdn>
 #   --set runaicluster:cluster.uid=<uuid-from-CP-API>
 #   --set runaicluster:controlPlane.clientSecret=<secret-from-CP-API>
 #   --set runaicluster:global.customCA.enabled=true
-# Or use a pre-created Secret instead of inline uid/clientSecret:
+# Or, recommended:
 #   --set runaicluster:controlPlane.existingSecret=runai-cluster-client-secret
 #
-# Pre-created secrets needed in the `runai` namespace (created by
+# Pre-created secrets in the `runai` namespace (created by
 # tools/runai-secrets.py):
 #   runai-reg-creds                       dockerconfigjson
 #   runai-cluster-domain-tls-secret       tls
@@ -62,24 +44,19 @@ metadata:
   name: kind-runai-cluster
 
 spec:
-  base: kind-runai
+  base: kind
 
   criteria:
     service: kind
-    platform: runai
-    intent: training
+    platform: runai-cluster
+
+  mixins:
+    - platform-runai-cluster
 
   componentRefs:
-    # Stage 1 already deployed the CP — keep it out of this bundle so
-    # `helm upgrade --install` does not re-run the chart on every
-    # cluster-stage iteration.
-    - name: runai-backend
-      type: Helm
-      overrides:
-        enabled: false
-
     # fake-gpu-operator is mutually exclusive with the real gpu-operator
-    # (same namespace). Pre-deploy step: label workers once —
+    # (same namespace). Pre-deploy step on a vanilla Kind cluster: label
+    # workers once —
     #   kubectl label nodes -l '!node-role.kubernetes.io/control-plane' \
     #     run.ai/simulated-gpu-node-pool=default --overwrite
     # On kwok-simulated clusters the provisioner already pre-labels
@@ -89,36 +66,46 @@ spec:
       type: Helm
       valuesFile: components/fake-gpu-operator/values.yaml
 
-    # Re-enable the prometheus stack disabled by `kind-runai`. The
-    # cluster chart federates from this Prometheus via the
-    # runai-prometheus-pushgateway pattern.
-    - name: prometheus-operator-crds
+    # Disable the real GPU stack — fake-gpu-operator owns the gpu-operator
+    # namespace exclusively in the lab flavor.
+    - name: gpu-operator
       type: Helm
       overrides:
-        enabled: true
+        enabled: false
 
-    - name: kube-prometheus-stack
+    - name: nfd
       type: Helm
       overrides:
-        enabled: true
+        enabled: false
 
-    - name: k8s-ephemeral-storage-metrics
+    - name: nvsentinel
       type: Helm
       overrides:
-        enabled: true
+        enabled: false
 
-    # prometheus-adapter (custom-metrics HPA) — optional but cheap;
-    # re-enable so HPA-on-GPU-utilization examples work out of the box.
-    - name: prometheus-adapter
+    - name: nodewright-operator
       type: Helm
       overrides:
-        enabled: true
+        enabled: false
 
-    # Run:ai cluster agent. Depends on kube-prometheus-stack for
-    # ServiceMonitor scraping of GPU metrics; CP is intentionally not
-    # listed here (it lives in stage 1's bundle, not this one).
-    - name: runai-cluster
+    - name: nvidia-dra-driver-gpu
       type: Helm
-      valuesFile: components/runai-cluster/values.yaml
-      dependencyRefs:
-        - kube-prometheus-stack
+      overrides:
+        enabled: false
+
+    - name: network-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Conflicts with Run:ai's own scheduler bundled in the cluster chart.
+    - name: kai-scheduler
+      type: Helm
+      overrides:
+        enabled: false
+
+    # cert-manager unused — TLS secrets are pre-created out-of-band.
+    - name: cert-manager
+      type: Helm
+      overrides:
+        enabled: false

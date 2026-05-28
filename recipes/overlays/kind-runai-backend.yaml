@@ -1,0 +1,110 @@
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Run:ai Control Plane on Kind ("lab" flavor).
+#
+# CP-only — no GPU operator, no Prometheus stack, no cluster agent. The
+# CP is a centralized backend and does not care whether GPUs exist on
+# the cluster it runs on. The cluster agent is a separate platform
+# (`runai-cluster`) and lives in `kind-runai-cluster.yaml`.
+#
+# Selection: `aicr recipe --service kind --platform runai-backend`.
+#
+# Pre-created secrets in the `runai-backend` namespace (created by
+# tools/runai-secrets.py):
+#   runai-reg-creds         dockerconfigjson  JFrog pull credentials
+#   runai-backend-tls       tls               cert + key for global.domain
+#   runai-ca-cert           Opaque            optional custom CA chain
+
+kind: RecipeMetadata
+apiVersion: aicr.nvidia.com/v1alpha1
+metadata:
+  name: kind-runai-backend
+
+spec:
+  base: kind
+
+  criteria:
+    service: kind
+    platform: runai-backend
+
+  mixins:
+    - platform-runai-backend
+
+  componentRefs:
+    # Lab flavor: no real GPU stack, no Prometheus stack, no cert-manager.
+    # The CP chart embeds its own Postgres/Keycloak/NATS/Thanos/Prometheus,
+    # and TLS secrets are pre-created by runai-secrets.py.
+    - name: gpu-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nfd
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nvsentinel
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nodewright-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nvidia-dra-driver-gpu
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: network-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Conflicts with Run:ai's own scheduler (kai-scheduler is mutually
+    # exclusive with the cluster chart's scheduler, but disabling here
+    # in the CP overlay is harmless and keeps the lab profile minimal).
+    - name: kai-scheduler
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: cert-manager
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: prometheus-operator-crds
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: kube-prometheus-stack
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: k8s-ephemeral-storage-metrics
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: prometheus-adapter
+      type: Helm
+      overrides:
+        enabled: false
