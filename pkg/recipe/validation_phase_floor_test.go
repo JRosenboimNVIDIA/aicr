@@ -208,7 +208,13 @@ func enumerateGateableOverlays(s *MetadataStore) []string {
 		if c == nil {
 			continue
 		}
-		if c.Intent == CriteriaIntentAny || c.Service == CriteriaServiceAny {
+		// Empty == any per the matcher's semantics (MatchesCriteriaField),
+		// so treat unset Intent/Service the same as the explicit "any"
+		// wildcard. Otherwise platform-only or os-only wildcard fragments
+		// (e.g., recipes/overlays/runai-backend.yaml) would be enumerated
+		// here even though they are cross-cutting overlays.
+		if c.Intent == CriteriaIntentAny || c.Intent == "" ||
+			c.Service == CriteriaServiceAny || c.Service == "" {
 			continue
 		}
 		out = append(out, name)
