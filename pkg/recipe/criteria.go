@@ -262,13 +262,21 @@ func AllCriteriaOSTypes() []string {
 type CriteriaPlatformType string
 
 // CriteriaPlatformType constants for supported platforms.
+//
+// Run:ai is split into two separable platform values because the Control
+// Plane (runai-backend) and the Cluster agent (runai-cluster) are
+// independently deployable products — the CP can manage many clusters,
+// and the cluster agent registers against an existing CP via REST. They
+// each get their own overlay/mixin so they can be selected and bundled
+// in isolation.
 const (
-	CriteriaPlatformAny      CriteriaPlatformType = "any"
-	CriteriaPlatformDynamo   CriteriaPlatformType = "dynamo"
-	CriteriaPlatformKubeflow CriteriaPlatformType = "kubeflow"
-	CriteriaPlatformNIM      CriteriaPlatformType = "nim"
-	CriteriaPlatformRunai    CriteriaPlatformType = "runai"
-	CriteriaPlatformSlurm    CriteriaPlatformType = "slurm"
+	CriteriaPlatformAny          CriteriaPlatformType = "any"
+	CriteriaPlatformDynamo       CriteriaPlatformType = "dynamo"
+	CriteriaPlatformKubeflow     CriteriaPlatformType = "kubeflow"
+	CriteriaPlatformNIM          CriteriaPlatformType = "nim"
+	CriteriaPlatformRunaiBackend CriteriaPlatformType = "runai-backend"
+	CriteriaPlatformRunaiCluster CriteriaPlatformType = "runai-cluster"
+	CriteriaPlatformSlurm        CriteriaPlatformType = "slurm"
 )
 
 // ParseCriteriaPlatformType parses a string into a CriteriaPlatformType.
@@ -283,8 +291,10 @@ func ParseCriteriaPlatformType(s string) (CriteriaPlatformType, error) {
 		return CriteriaPlatformKubeflow, nil
 	case "nim":
 		return CriteriaPlatformNIM, nil
-	case "runai":
-		return CriteriaPlatformRunai, nil
+	case "runai-backend", "runaicp", "runai-cp":
+		return CriteriaPlatformRunaiBackend, nil
+	case "runai-cluster", "runaicluster":
+		return CriteriaPlatformRunaiCluster, nil
 	case "slurm":
 		return CriteriaPlatformSlurm, nil
 	default:
@@ -299,7 +309,7 @@ func ParseCriteriaPlatformType(s string) (CriteriaPlatformType, error) {
 // types sorted alphabetically. For the union of static + registry, use
 // AllCriteriaPlatformTypes.
 func GetCriteriaPlatformTypes() []string {
-	return []string{"dynamo", "kubeflow", "nim", "runai", "slurm"}
+	return []string{"dynamo", "kubeflow", "nim", "runai-backend", "runai-cluster", "slurm"}
 }
 
 // AllCriteriaPlatformTypes returns the union of the static OSS list and

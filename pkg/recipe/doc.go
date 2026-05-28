@@ -95,7 +95,8 @@
 //   - CriteriaPlatformKubeflow: Kubeflow
 //   - CriteriaPlatformDynamo: NVIDIA Dynamo
 //   - CriteriaPlatformNIM: NVIDIA NIM
-//   - CriteriaPlatformRunai: NVIDIA Run:ai
+//   - CriteriaPlatformRunaiBackend: NVIDIA Run:ai Control Plane (independently deployable)
+//   - CriteriaPlatformRunaiCluster: NVIDIA Run:ai Cluster agent (independently deployable)
 //   - CriteriaPlatformSlurm: SchedMD Slinky Slurm
 //   - CriteriaPlatformAny: Any platform (wildcard)
 //

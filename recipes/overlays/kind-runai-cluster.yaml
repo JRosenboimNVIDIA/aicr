@@ -1,0 +1,111 @@
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Run:ai cluster agent on Kind ("lab" flavor).
+#
+# Cluster-only — fake GPUs (via fake-gpu-operator), the Prometheus
+# stack the cluster chart federates from, and the cluster agent itself.
+# The Control Plane is a separate platform (`runai-backend`) and lives
+# in `kind-runai-backend.yaml`. The two are independently deployable;
+# you can install one without the other.
+#
+# Selection: `aicr recipe --service kind --platform runai-cluster`.
+#
+# Required deploy-time --set values (or use existingSecret):
+#   --set runaicluster:controlPlane.url=<fqdn>
+#   --set runaicluster:cluster.url=<fqdn>
+#   --set runaicluster:cluster.uid=<uuid-from-CP-API>
+#   --set runaicluster:controlPlane.clientSecret=<secret-from-CP-API>
+#   --set runaicluster:global.customCA.enabled=true
+# Or, recommended:
+#   --set runaicluster:controlPlane.existingSecret=runai-cluster-client-secret
+#
+# Pre-created secrets in the `runai` namespace (created by
+# tools/runai-secrets.py):
+#   runai-reg-creds                       dockerconfigjson
+#   runai-cluster-domain-tls-secret       tls
+#   runai-cluster-domain-star-tls-secret  tls (host-routing wildcard)
+#   runai-ca-cert                         Opaque (when global.customCA.enabled=true)
+
+kind: RecipeMetadata
+apiVersion: aicr.nvidia.com/v1alpha1
+metadata:
+  name: kind-runai-cluster
+
+spec:
+  base: kind
+
+  criteria:
+    service: kind
+    platform: runai-cluster
+
+  mixins:
+    - platform-runai-cluster
+
+  componentRefs:
+    # fake-gpu-operator is mutually exclusive with the real gpu-operator
+    # (same namespace). Pre-deploy step on a vanilla Kind cluster: label
+    # workers once —
+    #   kubectl label nodes -l '!node-role.kubernetes.io/control-plane' \
+    #     run.ai/simulated-gpu-node-pool=default --overwrite
+    # On kwok-simulated clusters the provisioner already pre-labels
+    # workers with run.ai/simulated-gpu-node-pool=nodepool-0; the
+    # component values declare both pool names so either works.
+    - name: fake-gpu-operator
+      type: Helm
+      valuesFile: components/fake-gpu-operator/values.yaml
+
+    # Disable the real GPU stack — fake-gpu-operator owns the gpu-operator
+    # namespace exclusively in the lab flavor.
+    - name: gpu-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nfd
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nvsentinel
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nodewright-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: nvidia-dra-driver-gpu
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: network-operator
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Conflicts with Run:ai's own scheduler bundled in the cluster chart.
+    - name: kai-scheduler
+      type: Helm
+      overrides:
+        enabled: false
+
+    # cert-manager unused — TLS secrets are pre-created out-of-band.
+    - name: cert-manager
+      type: Helm
+      overrides:
+        enabled: false

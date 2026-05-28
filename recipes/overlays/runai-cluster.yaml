@@ -1,0 +1,67 @@
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Run:ai cluster agent on vanilla Kubernetes (any service).
+#
+# Service-agnostic cluster overlay — works on EKS, GKE, AKS, on-prem
+# bare-metal, etc. with the real NVIDIA gpu-operator stack. The cluster
+# chart itself is portable; this overlay composes the
+# platform-runai-cluster mixin and inherits service-/OS-specific
+# behavior from whatever base recipe the user composes.
+#
+# For OpenShift, layer in the OCP-specific values via --set:
+#   --set runaicluster:openShift.mode=Enabled
+#
+# Selection: `aicr recipe --platform runai-cluster` (matches any service).
+# When a service-specific overlay (e.g. kind-runai-cluster) exists for
+# the queried service, AICR's specificity matcher prefers that one.
+#
+# Required deploy-time --set values (or use existingSecret):
+#   --set runaicluster:controlPlane.url=<cp-fqdn>
+#   --set runaicluster:cluster.url=<cluster-fqdn>
+#   --set runaicluster:cluster.uid=<uuid-from-CP-API>
+#   --set runaicluster:controlPlane.clientSecret=<secret-from-CP-API>
+#
+# Pre-created secrets in the `runai` namespace:
+#   runai-reg-creds                       dockerconfigjson
+#   runai-cluster-domain-tls-secret       tls
+#   runai-cluster-domain-star-tls-secret  tls (host-routing wildcard)
+#   runai-ca-cert                         Opaque (when global.customCA.enabled=true)
+
+kind: RecipeMetadata
+apiVersion: aicr.nvidia.com/v1alpha1
+metadata:
+  name: runai-cluster
+
+spec:
+  base: base
+
+  criteria:
+    platform: runai-cluster
+
+  mixins:
+    - platform-runai-cluster
+
+  componentRefs:
+    # Conflicts with Run:ai's own scheduler bundled in the cluster chart.
+    - name: kai-scheduler
+      type: Helm
+      overrides:
+        enabled: false
+
+    # cert-manager unused — TLS secrets are pre-created out-of-band.
+    - name: cert-manager
+      type: Helm
+      overrides:
+        enabled: false

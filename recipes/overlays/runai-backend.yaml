@@ -1,0 +1,85 @@
+# Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Run:ai Control Plane on vanilla Kubernetes (any service).
+#
+# Service-agnostic CP overlay — works on EKS, GKE, AKS, on-prem
+# bare-metal, etc. The CP chart itself is portable; this overlay only
+# composes the platform-runai-backend mixin and inherits service- and
+# OS-specific behavior from whatever base recipe the user composes.
+#
+# For OpenShift, layer in the OCP-specific values via --set:
+#   --set runaicp:global.config.kubernetesDistribution=openshift
+#
+# Selection: `aicr recipe --platform runai-backend` (matches any service).
+# When a service-specific overlay (e.g. kind-runai-backend) exists for
+# the queried service, AICR's specificity matcher prefers that one.
+#
+# Pre-created secrets in the `runai-backend` namespace (created by
+# tools/runai-secrets.py):
+#   runai-reg-creds         dockerconfigjson  JFrog pull credentials
+#   runai-backend-tls       tls               cert + key for global.domain
+#   runai-ca-cert           Opaque            optional custom CA chain
+
+kind: RecipeMetadata
+apiVersion: aicr.nvidia.com/v1alpha1
+metadata:
+  name: runai-backend
+
+spec:
+  base: base
+
+  criteria:
+    platform: runai-backend
+
+  mixins:
+    - platform-runai-backend
+
+  componentRefs:
+    # The CP chart embeds its own observability and database stack — turn
+    # off the base components that overlap or are unused at the CP layer.
+    # GPU/NFD/etc. are not disabled here: a CP-only deployment can run
+    # alongside a GPU stack (or on a CP-only cluster that has none),
+    # and disabling them at the platform-axis level would hurt overlay
+    # composition for shared clusters.
+    - name: cert-manager
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: prometheus-operator-crds
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: kube-prometheus-stack
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: k8s-ephemeral-storage-metrics
+      type: Helm
+      overrides:
+        enabled: false
+
+    - name: prometheus-adapter
+      type: Helm
+      overrides:
+        enabled: false
+
+    # Conflicts with Run:ai's own scheduler bundled in the cluster chart.
+    - name: kai-scheduler
+      type: Helm
+      overrides:
+        enabled: false

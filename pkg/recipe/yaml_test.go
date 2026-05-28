@@ -561,7 +561,7 @@ func TestIntermediateRecipesHavePartialCriteria(t *testing.T) {
 			// Verify it has at least one criteria field to differentiate it
 			if metadata.Spec.Base != "" && metadata.Spec.Criteria != nil {
 				c := metadata.Spec.Criteria
-				hasSomeCriteria := c.Service != "" || c.Accelerator != "" || c.OS != "" || c.Intent != ""
+				hasSomeCriteria := c.Service != "" || c.Accelerator != "" || c.OS != "" || c.Intent != "" || c.Platform != ""
 				if !hasSomeCriteria {
 					t.Errorf("recipe with spec.base should have at least one criteria field set")
 				}
@@ -630,7 +630,7 @@ func TestLeafRecipesHaveCompleteCriteria(t *testing.T) {
 
 			// Leaf recipes should have at least one criteria field to distinguish them
 			// Empty/missing fields act as wildcards and match everything, which is valid
-			hasSomeCriteria := c.Service != "" || c.Accelerator != "" || c.OS != "" || c.Intent != ""
+			hasSomeCriteria := c.Service != "" || c.Accelerator != "" || c.OS != "" || c.Intent != "" || c.Platform != ""
 			if !hasSomeCriteria {
 				t.Error("leaf recipe should have at least one criteria field set")
 			}

@@ -808,8 +808,12 @@ func TestParseCriteriaPlatformType(t *testing.T) {
 		{"Kubeflow uppercase", "Kubeflow", CriteriaPlatformKubeflow, false},
 		{"nim", "nim", CriteriaPlatformNIM, false},
 		{"NIM uppercase", "NIM", CriteriaPlatformNIM, false},
-		{"runai", "runai", CriteriaPlatformRunai, false},
-		{"Runai uppercase", "Runai", CriteriaPlatformRunai, false},
+		{"runai-backend", "runai-backend", CriteriaPlatformRunaiBackend, false},
+		{"runai-backend uppercase", "Runai-Backend", CriteriaPlatformRunaiBackend, false},
+		{"runaicp alias", "runaicp", CriteriaPlatformRunaiBackend, false},
+		{"runai-cp alias", "runai-cp", CriteriaPlatformRunaiBackend, false},
+		{"runai-cluster", "runai-cluster", CriteriaPlatformRunaiCluster, false},
+		{"runaicluster alias", "runaicluster", CriteriaPlatformRunaiCluster, false},
 		{"slurm", "slurm", CriteriaPlatformSlurm, false},
 		{"Slurm uppercase", "Slurm", CriteriaPlatformSlurm, false},
 		{"invalid", "invalid", CriteriaPlatformAny, true},
@@ -833,7 +837,7 @@ func TestGetCriteriaPlatformTypes(t *testing.T) {
 	types := GetCriteriaPlatformTypes()
 
 	// Should return sorted list
-	expected := []string{"dynamo", "kubeflow", "nim", "runai", "slurm"}
+	expected := []string{"dynamo", "kubeflow", "nim", "runai-backend", "runai-cluster", "slurm"}
 	if len(types) != len(expected) {
 		t.Errorf("GetCriteriaPlatformTypes() returned %d types, want %d", len(types), len(expected))
 	}
